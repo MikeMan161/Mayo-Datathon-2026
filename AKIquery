@@ -1,0 +1,120 @@
+-- SAVE AS: 07_cancer_aki_kdigo_stage2
+WITH cancer_patients AS (
+  -- STEP 1: FIND ALL ACTIVE CANCER PATIENTS AGE 18+
+  -- ICD-10: C00-C96Z = all active malignancies
+  -- ICD-9:  140-208  = all active malignancies
+  -- Excluding history/remission codes Z85 (ICD-10) and V10 (ICD-9)
+  SELECT DISTINCT d.subject_id, d.hadm_id
+  FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd` d
+  JOIN `physionet-data.mimiciv_3_1_hosp.patients` p
+    ON d.subject_id = p.subject_id
+  WHERE 
+    (
+      (d.icd_version = 10 AND d.icd_code BETWEEN 'C00' AND 'C96Z'
+      AND d.icd_code NOT LIKE 'Z85%')
+    )
+    OR
+    (
+      (d.icd_version = 9 
+      AND SAFE_CAST(SUBSTR(d.icd_code, 1, 3) AS INT64) BETWEEN 140 AND 208
+      AND d.icd_code NOT LIKE 'V10%')
+    )
+    AND p.anchor_age >= 18
+),
+
+-- STEP 2: BASELINE CREATININE
+-- We take the MINIMUM serum creatinine within the first 24 hours
+-- of admission as the baseline reference point
+-- Using MIN because we want the best kidney function at admission
+-- itemids: 50912, 52546, 51081, 51977, 52024 = serum creatinine only
+baseline_creatinine AS (
+  SELECT 
+    l.subject_id,
+    l.hadm_id,
+    MIN(l.valuenum) AS baseline_cr
+  FROM `physionet-data.mimiciv_3_1_hosp.labevents` l
+  JOIN `physionet-data.mimiciv_3_1_hosp.admissions` a
+    ON l.subject_id = a.subject_id AND l.hadm_id = a.hadm_id
+  WHERE 
+    l.itemid IN (50912, 52546, 51081, 51977, 52024)
+    AND l.valuenum > 0
+    -- First 24 hours of admission only
+    AND l.charttime BETWEEN a.admittime 
+        AND TIMESTAMP_ADD(a.admittime, INTERVAL 24 HOUR)
+  GROUP BY l.subject_id, l.hadm_id
+),
+
+-- STEP 3: PEAK CREATININE ANYTIME DURING ADMISSION
+-- We take the MAXIMUM serum creatinine recorded at any point
+-- during the entire hospitalization (including first 24 hours)
+-- KDIGO Stage 2 = peak creatinine >= 2.0 x baseline
+-- e.g. if baseline was 1.0, peak must be >= 2.0 to qualify
+peak_creatinine AS (
+  SELECT 
+    l.subject_id,
+    l.hadm_id,
+    MAX(l.valuenum) AS peak_cr
+  FROM `physionet-data.mimiciv_3_1_hosp.labevents` l
+  JOIN `physionet-data.mimiciv_3_1_hosp.admissions` a
+    ON l.subject_id = a.subject_id AND l.hadm_id = a.hadm_id
+  WHERE 
+    l.itemid IN (50912, 52546, 51081, 51977, 52024)
+    AND l.valuenum > 0
+    -- Anytime during the full admission
+    AND l.charttime BETWEEN a.admittime AND a.dischtime
+  GROUP BY l.subject_id, l.hadm_id
+),
+
+-- STEP 4: FLAG KDIGO STAGE 2 AKI
+-- A patient meets Stage 2 if their peak creatinine is
+-- >= 2.0 times their baseline creatinine at any point
+-- during the hospitalization
+aki_kdigo_stage2 AS (
+  SELECT 
+    b.subject_id,
+    b.hadm_id,
+    b.baseline_cr,
+    p.peak_cr,
+    ROUND(p.peak_cr / b.baseline_cr, 2) AS cr_ratio
+  FROM baseline_creatinine b
+  JOIN peak_creatinine p
+    ON b.subject_id = p.subject_id AND b.hadm_id = p.hadm_id
+  -- KDIGO Stage 2 threshold: peak >= 2x baseline
+  WHERE p.peak_cr >= 2.0 * b.baseline_cr
+),
+
+-- STEP 5: BUILD FINAL COHORT
+-- All cancer patients flagged as AKI Stage 2 or not
+-- LEFT JOIN means all cancer patients are kept
+-- has_aki = 1 if they met KDIGO Stage 2, 0 if they did not
+cohort AS (
+  SELECT 
+    c.subject_id,
+    c.hadm_id,
+    CASE WHEN a.subject_id IS NOT NULL THEN 1 ELSE 0 END AS has_aki,
+    adm.hospital_expire_flag,
+    adm.admittime,
+    adm.dischtime,
+    TIMESTAMP_DIFF(adm.dischtime, adm.admittime, HOUR) / 24.0 AS los_days
+  FROM cancer_patients c
+  JOIN `physionet-data.mimiciv_3_1_hosp.admissions` adm
+    ON c.subject_id = adm.subject_id AND c.hadm_id = adm.hadm_id
+  LEFT JOIN aki_kdigo_stage2 a
+    ON c.subject_id = a.subject_id AND c.hadm_id = a.hadm_id
+)
+
+-- STEP 6: SUMMARIZE RESULTS BY GROUP
+-- Two groups: Cancer + KDIGO Stage 2 AKI vs Cancer without
+-- mortality_pct: % who died during admission
+-- avg_los_days: average length of hospital stay in days
+SELECT
+  CASE WHEN has_aki = 1 
+    THEN 'Cancer + KDIGO Stage 2 AKI' 
+    ELSE 'Cancer, No Stage 2 AKI' 
+  END AS group_label,
+  COUNT(*) AS patient_count,
+  ROUND(AVG(hospital_expire_flag) * 100, 1) AS mortality_pct,
+  ROUND(AVG(los_days), 1) AS avg_los_days
+FROM cohort
+GROUP BY has_aki
+ORDER BY has_aki DESC
