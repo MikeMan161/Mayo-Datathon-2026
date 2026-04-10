@@ -1,4 +1,3 @@
--- SAVE AS: 07_cancer_aki_kdigo_stage2
 WITH cancer_patients AS (
   -- STEP 1: FIND ALL ACTIVE CANCER PATIENTS AGE 18+
   -- ICD-10: C00-C96Z = all active malignancies
