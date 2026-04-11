@@ -44,23 +44,6 @@ AND d.hadm_id NOT IN (
 )
 AND d.hadm_id NOT IN (
     SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
-    WHERE (
-        (icd_version = 9 AND icd_code IN (
-            '585','5851','5852','5853','5854','5855','5856','5859'
-        ))
-        OR (icd_version = 10 AND icd_code IN (
-            'N18','N181','N182','N183','N1830','N1831','N1832',
-            'N184','N185','N186','N189'
-        ))
-    )
-)
-AND d.hadm_id NOT IN (
-    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
     WHERE icd_code IN ('V451','V4511','V4512')
 )
 AND TIMESTAMP_DIFF(a.dischtime, a.admittime, HOUR) >= 0
-AND d.hadm_id NOT IN (
-    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
-    WHERE icd_code IN ('V451', 'V4511', 'V4512')
-)
-GROUP BY setting
