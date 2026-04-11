@@ -1,8 +1,17 @@
 -- Hospital lung cancer patients
 SELECT 'Hospital' AS setting, COUNT(DISTINCT d.hadm_id) AS patient_count
 FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd` d
-WHERE (d.icd_version = 10 AND d.icd_code IN ('C3400', 'C3401', 'C3402', 'C3490', 'C3410', 'C3411', 'C3412'))
-   OR (d.icd_version = 9 AND d.icd_code IN ('1620', '1622', '1623', '1624', '1625', '1628', '1629'))
+WHERE ((d.icd_version = 10 AND d.icd_code IN ('C3400', 'C3401', 'C3402', 'C3490', 'C3410', 'C3411', 'C3412'))
+   OR (d.icd_version = 9 AND d.icd_code IN ('1620', '1622', '1623', '1624', '1625', '1628', '1629')))
+AND d.hadm_id NOT IN (
+    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+    WHERE seq_num = 1
+    AND icd_code IN ('N170', 'N171', 'N172', 'N178', 'N179', '5845', '5847', '5848', '5849')
+)
+AND d.hadm_id NOT IN (
+    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+    WHERE icd_code IN ('V451', 'V4511', 'V4512')
+)
 
 UNION ALL
 
@@ -11,5 +20,99 @@ SELECT 'ICU' AS setting, COUNT(DISTINCT i.hadm_id) AS patient_count
 FROM `physionet-data.mimiciv_3_1_icu.icustays` i
 INNER JOIN `physionet-data.mimiciv_3_1_hosp.diagnoses_icd` d
   ON i.hadm_id = d.hadm_id
-WHERE (d.icd_version = 10 AND d.icd_code IN ('C3400', 'C3401', 'C3402', 'C3490', 'C3410', 'C3411', 'C3412'))
-   OR (d.icd_version = 9 AND d.icd_code IN ('1620', '1622', '1623', '1624', '1625', '1628', '1629'))
+WHERE ((d.icd_version = 10 AND d.icd_code IN ('C3400', 'C3401', 'C3402', 'C3490', 'C3410', 'C3411', 'C3412'))
+   OR (d.icd_version = 9 AND d.icd_code IN ('1620', '1622', '1623', '1624', '1625', '1628', '1629')))
+AND d.hadm_id NOT IN (
+    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+    WHERE seq_num = 1
+    AND icd_code IN ('N170', 'N171', 'N172', 'N178', 'N179', '5845', '5847', '5848', '5849')
+)
+AND d.hadm_id NOT IN (
+    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+    WHERE icd_code IN ('V451', 'V4511', 'V4512')
+)
+
+UNION ALL
+
+-- Excluded AKI Hospital
+SELECT 'Excluded AKI (Hospital)' AS setting, COUNT(DISTINCT d.hadm_id) AS patient_count
+FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd` d
+WHERE ((d.icd_version = 10 AND d.icd_code IN ('C3400', 'C3401', 'C3402', 'C3490', 'C3410', 'C3411', 'C3412'))
+   OR (d.icd_version = 9 AND d.icd_code IN ('1620', '1622', '1623', '1624', '1625', '1628', '1629')))
+AND d.hadm_id IN (
+    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+    WHERE seq_num = 1
+    AND icd_code IN ('N170', 'N171', 'N172', 'N178', 'N179', '5845', '5847', '5848', '5849')
+)
+
+UNION ALL
+
+-- Excluded AKI ICU
+SELECT 'Excluded AKI (ICU)' AS setting, COUNT(DISTINCT i.hadm_id) AS patient_count
+FROM `physionet-data.mimiciv_3_1_icu.icustays` i
+INNER JOIN `physionet-data.mimiciv_3_1_hosp.diagnoses_icd` d
+  ON i.hadm_id = d.hadm_id
+WHERE ((d.icd_version = 10 AND d.icd_code IN ('C3400', 'C3401', 'C3402', 'C3490', 'C3410', 'C3411', 'C3412'))
+   OR (d.icd_version = 9 AND d.icd_code IN ('1620', '1622', '1623', '1624', '1625', '1628', '1629')))
+AND d.hadm_id IN (
+    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+    WHERE seq_num = 1
+    AND icd_code IN ('N170', 'N171', 'N172', 'N178', 'N179', '5845', '5847', '5848', '5849')
+)
+
+UNION ALL
+
+-- Excluded Dialysis Hospital
+SELECT 'Excluded Dialysis (Hospital)' AS setting, COUNT(DISTINCT d.hadm_id) AS patient_count
+FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd` d
+WHERE ((d.icd_version = 10 AND d.icd_code IN ('C3400', 'C3401', 'C3402', 'C3490', 'C3410', 'C3411', 'C3412'))
+   OR (d.icd_version = 9 AND d.icd_code IN ('1620', '1622', '1623', '1624', '1625', '1628', '1629')))
+AND d.hadm_id IN (
+    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+    WHERE icd_code IN ('V451', 'V4511', 'V4512')
+)
+
+UNION ALL
+
+-- Excluded Dialysis ICU
+SELECT 'Excluded Dialysis (ICU)' AS setting, COUNT(DISTINCT i.hadm_id) AS patient_count
+FROM `physionet-data.mimiciv_3_1_icu.icustays` i
+INNER JOIN `physionet-data.mimiciv_3_1_hosp.diagnoses_icd` d
+  ON i.hadm_id = d.hadm_id
+WHERE ((d.icd_version = 10 AND d.icd_code IN ('C3400', 'C3401', 'C3402', 'C3490', 'C3410', 'C3411', 'C3412'))
+   OR (d.icd_version = 9 AND d.icd_code IN ('1620', '1622', '1623', '1624', '1625', '1628', '1629')))
+AND d.hadm_id IN (
+    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+    WHERE icd_code IN ('V451', 'V4511', 'V4512')
+)
+
+UNION ALL
+
+-- ICU stay duration buckets
+SELECT
+  CASE
+    WHEN TIMESTAMP_DIFF(i.outtime, i.intime, HOUR) < 24 THEN 'ICU Stay: <24 hours'
+    WHEN TIMESTAMP_DIFF(i.outtime, i.intime, HOUR) < 48 THEN 'ICU Stay: 24-48 hours'
+    WHEN TIMESTAMP_DIFF(i.outtime, i.intime, HOUR) < 72 THEN 'ICU Stay: 48-72 hours'
+    WHEN TIMESTAMP_DIFF(i.outtime, i.intime, HOUR) < 96 THEN 'ICU Stay: 72-96 hours'
+    WHEN TIMESTAMP_DIFF(i.outtime, i.intime, HOUR) < 120 THEN 'ICU Stay: 96-120 hours'
+    WHEN TIMESTAMP_DIFF(i.outtime, i.intime, HOUR) < 144 THEN 'ICU Stay: 120-144 hours'
+    WHEN TIMESTAMP_DIFF(i.outtime, i.intime, HOUR) < 168 THEN 'ICU Stay: 144-168 hours'
+    ELSE 'ICU Stay: >168 hours'
+  END AS setting,
+  COUNT(DISTINCT i.hadm_id) AS patient_count
+FROM `physionet-data.mimiciv_3_1_icu.icustays` i
+INNER JOIN `physionet-data.mimiciv_3_1_hosp.diagnoses_icd` d
+  ON i.hadm_id = d.hadm_id
+WHERE ((d.icd_version = 10 AND d.icd_code IN ('C3400', 'C3401', 'C3402', 'C3490', 'C3410', 'C3411', 'C3412'))
+   OR (d.icd_version = 9 AND d.icd_code IN ('1620', '1622', '1623', '1624', '1625', '1628', '1629')))
+AND d.hadm_id NOT IN (
+    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+    WHERE seq_num = 1
+    AND icd_code IN ('N170', 'N171', 'N172', 'N178', 'N179', '5845', '5847', '5848', '5849')
+)
+AND d.hadm_id NOT IN (
+    SELECT hadm_id FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+    WHERE icd_code IN ('V451', 'V4511', 'V4512')
+)
+GROUP BY setting
