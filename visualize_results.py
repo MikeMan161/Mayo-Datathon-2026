@@ -1,107 +1,117 @@
 import pandas as pd
-import xgboost as xgb
-import shap
 import matplotlib.pyplot as plt
 import numpy as np
 
 # -----------------------------
-# 1. LOAD CSV DATASET
+# 1. LOAD DATA
 # -----------------------------
-df = pd.read_csv("dummy_aki_dataset.csv")
+df = pd.read_csv("daily_predictions.csv")
+
+# Convert predicted risk to numeric
+df["predicted_risk"] = df["predicted_risk"].str.replace("%", "").astype(float)
 
 # -----------------------------
-# 2. BASIC CLEANING / ENCODING
+# 2. RISK OVER TIME (PER PATIENT)
 # -----------------------------
-df["sex"] = df["sex"].map({"M": 1, "F": 0})
+for patient_id in df["stay_id"].unique():
+    patient_df = df[df["stay_id"] == patient_id]
+
+    plt.figure()
+    plt.plot(patient_df["icu_day"], patient_df["predicted_risk"], marker='o')
+    plt.title(f"AKI Risk Over Time (Patient {patient_id})")
+    plt.xlabel("ICU Day")
+    plt.ylabel("Predicted AKI Risk (%)")
+    plt.grid()
+
+    plt.savefig(f"risk_over_time_{patient_id}.png")
+    plt.close()
+
+print("Saved: Risk over time plots")
 
 # -----------------------------
-# 3. FEATURES / TARGET
+# 3. GLOBAL FEATURE IMPORTANCE (SHAP)
 # -----------------------------
-features = [
-    "age", "sex", "creatinine", "lactate",
-    "map", "vasopressor", "fluid_balance", "ventilation"
-]
+shap_cols = [col for col in df.columns if col.startswith("shap_")]
 
-X = df[features]
+# Mean absolute SHAP values
+importance = df[shap_cols].abs().mean().sort_values(ascending=False)
 
-# -----------------------------
-# 11. LOAD TRAINED MODEL
-# -----------------------------
-model = xgb.XGBClassifier()
-model.load_model("aki_xgb_model.json")
+plt.figure()
+importance.plot(kind="bar")
+plt.title("Global Feature Importance (SHAP)")
+plt.xlabel("Features")
+plt.ylabel("Mean |SHAP Value|")
+plt.xticks(rotation=45)
 
-# -----------------------------
-# 7. PREDICT RISK EVERY 24H
-# -----------------------------
-df["predicted_risk"] = model.predict_proba(X)[:, 1]
-
-# =========================================================
-# 1. CLEAN GLOBAL FEATURE IMPORTANCE (REPLACES SHAP SUMMARY)
-# =========================================================
-importance = model.feature_importances_
-sorted_idx = np.argsort(importance)
-
-plt.figure(figsize=(8, 5))
-plt.barh(np.array(features)[sorted_idx], importance[sorted_idx])
-plt.title("Feature Importance (XGBoost Global View)")
-plt.xlabel("Importance Score")
 plt.tight_layout()
-plt.show()
+plt.savefig("feature_importance_shap.png")
+plt.close()
 
-# =========================================================
-# 2. SINGLE PATIENT STORY (CLEAN LINE PLOT)
-# =========================================================
-patient_id = 1001
-patient_df = df[df["patient_id"] == patient_id]
+print("Saved: SHAP feature importance")
 
-plt.figure(figsize=(8, 5))
-plt.plot(patient_df["time_hour"], patient_df["predicted_risk"], marker="o")
+# -----------------------------
+# 4. TOP FEATURES FREQUENCY
+# -----------------------------
+feature_counts = {}
 
-plt.title(f"AKI Risk Progression Over Time (Patient {patient_id})")
-plt.xlabel("Time (hours)")
-plt.ylabel("Predicted AKI Risk")
-plt.ylim(0, 1)
-plt.grid(True, alpha=0.3)
+for row in df["top_features"]:
+    features = [f.split(":")[0] for f in row.split("|")]
+    for f in features:
+        f = f.strip()
+        feature_counts[f] = feature_counts.get(f, 0) + 1
 
-plt.show()
+feature_counts = pd.Series(feature_counts).sort_values(ascending=False)
 
-# =========================================================
-# 3. COMPARE 3 PATIENT TYPES (MORE INSIGHTFUL THAN ALL LINES)
-# =========================================================
-selected_patients = [1001, 1006, 1017]
+plt.figure()
+feature_counts.plot(kind="bar")
+plt.title("Most Frequently Important Features")
+plt.xlabel("Feature")
+plt.ylabel("Count")
+plt.xticks(rotation=45)
 
-plt.figure(figsize=(8, 5))
+plt.tight_layout()
+plt.savefig("top_feature_frequency.png")
+plt.close()
 
-for pid in selected_patients:
-    temp = df[df["patient_id"] == pid]
-    plt.plot(temp["time_hour"], temp["predicted_risk"], marker="o", label=f"Patient {pid}")
+print("Saved: Top feature frequency")
 
-plt.title("AKI Risk Trajectories (Selected Patients)")
-plt.xlabel("Time (hours)")
-plt.ylabel("Predicted AKI Risk")
-plt.ylim(0, 1)
-plt.legend()
-plt.grid(True, alpha=0.3)
+# -----------------------------
+# 5. RISK vs OLIGURIA / ANURIA
+# -----------------------------
+plt.figure()
+df.boxplot(column="predicted_risk", by="flag_oliguria_24h")
+plt.title("Risk vs Oliguria")
+plt.suptitle("")
+plt.xlabel("Oliguria (0 = No, 1 = Yes)")
+plt.ylabel("Predicted Risk (%)")
 
-plt.show()
+plt.savefig("risk_vs_oliguria.png")
+plt.close()
 
-# =========================================================
-# 4. SHAP (ONLY FOR INTERPRETATION — NOT PRIMARY VISUAL)
-# =========================================================
-explainer = shap.Explainer(model)
-shap_values = explainer(X)
+plt.figure()
+df.boxplot(column="predicted_risk", by="flag_anuria_24h")
+plt.title("Risk vs Anuria")
+plt.suptitle("")
+plt.xlabel("Anuria (0 = No, 1 = Yes)")
+plt.ylabel("Predicted Risk (%)")
 
-# Keep SHAP but make it secondary
-shap.summary_plot(shap_values, X)
+plt.savefig("risk_vs_anuria.png")
+plt.close()
 
-# =========================================================
-# 5. SINGLE EXPLANATION (CLEANED)
-# =========================================================
-patient_example = df[df["patient_id"] == 1001]
+print("Saved: Risk vs clinical flags")
 
-row_idx = patient_example[patient_example["time_hour"] == 48].index[0]
+# -----------------------------
+# 6. RISK DISTRIBUTION
+# -----------------------------
+plt.figure()
+plt.hist(df["predicted_risk"], bins=20)
+plt.title("Distribution of Predicted AKI Risk")
+plt.xlabel("Risk (%)")
+plt.ylabel("Frequency")
 
-print("\nSHAP explanation for Patient 1001 at 48h:")
-shap.plots.waterfall(shap_values[row_idx])
+plt.savefig("risk_distribution.png")
+plt.close()
 
+print("Saved: Risk distribution")
 
+print("\nAll visualizations saved successfully.")
