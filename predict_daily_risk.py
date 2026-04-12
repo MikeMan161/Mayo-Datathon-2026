@@ -26,16 +26,25 @@ model.load_model("aki_xgb_model.json")
 # -----------------------------
 # This file should contain ONLY the latest 24h data
 # df_new = load_latest_data()
-df_new = pd.read_csv("dummy_aki_dataset.csv")
+df_new = pd.read_csv("dummy_aki_dataset2.csv")
 
 # -----------------------------
 # 3. SAME PREPROCESSING (CRITICAL)
 # -----------------------------
-df_new["sex"] = df_new["sex"].map({"M": 1, "F": 0})
+df_new["gender"] = df_new["gender"].map({"M": 1, "F": 0})
 
 features = [
-    "age", "sex", "creatinine", "lactate",
-    "map", "vasopressor", "fluid_balance", "ventilation"
+    "age",
+    "gender",
+    "cci_score",
+    "baseline_weight_kg",
+    "is_on_vasopressor",
+    "num_distinct_vasopressors",
+    "is_on_nephrotoxic",
+    "num_distinct_nephrotoxins",
+    "uo_rate_ml_kg_hr",
+    "flag_oliguria_24h",
+    "flag_anuria_24h"
 ]
 
 X_new = df_new[features]
@@ -86,7 +95,7 @@ df_new["top_features"] = top_features_list
 # 6. OUTPUT RESULTS
 # -----------------------------
 print("\nDaily AKI Risk Predictions:")
-print(df_new[["patient_id", "time_hour", "predicted_risk", "top_features"]])
+print(df_new[["stay_id", "icu_day", "predicted_risk", "top_features"]])
 
 # Optional: save results
 df_new.to_csv("daily_predictions.csv", index=False)
