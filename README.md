@@ -85,14 +85,6 @@ Patients were identified from MIMIC-IV using ICD-9 and ICD-10 lung cancer diagno
 
 The model is an XGBoost binary classifier trained with group-based train/test split (grouped by `stay_id`) to prevent data leakage across a patient’s ICU days. Class imbalance was handled via `scale_pos_weight`. Performance was evaluated using AUROC and classification report.
 
-## Team
-
-| Name | Contribution |
-|---|---|
-| Michael Rivera | SQL data extraction pipeline (`queries/`), cohort definition, feature engineering queries |
-| Khanh | AKI labeling, eGFR, urine output, MAP, prior CKD queries |
-| Bor | Fluid balance variable extraction |
-
 ## Data Access
 
 MIMIC-IV requires credentialed access through PhysioNet. To reproduce the SQL extractions, you will need a PhysioNet account with MIMIC-IV access and a connected Google BigQuery project.
